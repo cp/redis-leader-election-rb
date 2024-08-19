@@ -26,27 +26,29 @@ class RedisLeaderElection
   def mutually_exclusive
     loop do
       break if acquire_lock
-      puts "waiting for lock"
       sleep 1
     end
 
-    puts "acquired lock"
     threads = []
-    threads << Thread.new { yield }
-    threads << Thread.new { refresh_lock }
+    refresh_thread = Thread.new do
+      loop do
+        refresh_lock
+        sleep TIMEOUT / 2
+      end
+    end
+
+    threads << Thread.new do
+      yield
+      refresh_thread.kill
+    end
 
     threads.each(&:join)
   ensure
-    puts "releasing lock"
     release_lock
   end
 
   def refresh_lock
-    loop do
-      redis.set(key, instance_id, xx: true, ex: TIMEOUT)
-      puts "refreshed lock"
-      sleep TIMEOUT / 2
-    end
+    redis.set(key, instance_id, xx: true, ex: TIMEOUT)
   end
 
   def acquire_lock
@@ -54,10 +56,6 @@ class RedisLeaderElection
   end
 
   def release_lock
-    if redis.get(key) == instance_id
-      puts "releasing lock for #{instance_id}"
-
-      redis.del(key)
-    end
+    redis.del(key) if redis.get(key) == instance_id
   end
 end
