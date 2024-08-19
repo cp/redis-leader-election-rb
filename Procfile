@@ -1,2 +1,2 @@
-1: ruby ./redis_leader_election.rb
-2: ruby ./redis_leader_election.rb
+1: ruby ./app.rb
+2: ruby ./app.rb

@@ -1,43 +1,29 @@
 require 'redis'
 require 'securerandom'
 
-$stdout.sync = true
-
 class RedisLeaderElection
+  TIMEOUT = 10
+
   def self.run
     new.run
   end
 
-  def initialize
+  attr_reader :key, :redis
+
+  def initialize(key:)
+    @key = key
     @redis = Redis.new
   end
 
-  def application_id
-    @application_id ||= SecureRandom.uuid
+  def instance_id
+    @instance_id ||= SecureRandom.uuid
   end
 
-  def acquire_lock
-    @redis.set('leader-election', application_id, nx: true)
+  def self.mutually_exclusive(key:)
+    new(key: key).mutually_exclusive { yield }
   end
 
-  def release_lock
-    if @redis.get('leader-election') == application_id
-      puts "releasing lock for #{application_id}"
-
-      @redis.del('leader-election')
-    end
-  end
-
-  def run_task
-    loop do
-      puts "doing work"
-      sleep 1
-    end
-  end
-
-  def run
-    # Try and acquire the lock until elected leader
-    puts "booting application #{application_id}"
+  def mutually_exclusive
     loop do
       break if acquire_lock
       puts "waiting for lock"
@@ -45,11 +31,33 @@ class RedisLeaderElection
     end
 
     puts "acquired lock"
-    run_task
+    threads = []
+    threads << Thread.new { yield }
+    threads << Thread.new { refresh_lock }
+
+    threads.each(&:join)
   ensure
     puts "releasing lock"
     release_lock
   end
-end
 
-RedisLeaderElection.run
+  def refresh_lock
+    loop do
+      redis.set(key, instance_id, xx: true, ex: TIMEOUT)
+      puts "refreshed lock"
+      sleep TIMEOUT / 2
+    end
+  end
+
+  def acquire_lock
+    redis.set(key, instance_id, nx: true, ex: TIMEOUT)
+  end
+
+  def release_lock
+    if redis.get(key) == instance_id
+      puts "releasing lock for #{instance_id}"
+
+      redis.del(key)
+    end
+  end
+end
