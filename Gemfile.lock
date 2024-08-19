@@ -1,0 +1,18 @@
+GEM
+  specs:
+    connection_pool (2.4.1)
+    foreman (0.87.2)
+    redis (5.0.7)
+      redis-client (>= 0.9.0)
+    redis-client (0.16.0)
+      connection_pool
+
+PLATFORMS
+  arm64-darwin-23
+
+DEPENDENCIES
+  foreman
+  redis
+
+BUNDLED WITH
+   2.4.22
